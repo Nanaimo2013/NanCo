@@ -2,18 +2,44 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using NanCo.Games;
 
-namespace NanCo
+namespace NanCo.Language
 {
     public class NanScriptRunner
     {
         private readonly string sourceFile;
         private Dictionary<string, object> variables;
+        private Dictionary<string, Func<object[], object>> functions;
 
         public NanScriptRunner(string file)
         {
             sourceFile = file;
             variables = new Dictionary<string, object>();
+            functions = new Dictionary<string, Func<object[], object>>();
+            RegisterBuiltInFunctions();
+        }
+
+        private void RegisterBuiltInFunctions()
+        {
+            functions["createGame"] = (args) => {
+                if (args.Length > 0 && args[0] is string gameName)
+                {
+                    var gameManager = new GameManager();
+                    gameManager.RegisterGame(gameName);
+                    return true;
+                }
+                return false;
+            };
+
+            functions["addCommand"] = (args) => {
+                if (args.Length > 1 && args[0] is string cmdName && args[1] is Action action)
+                {
+                    CommandProcessor.RegisterCustomCommand(cmdName, action);
+                    return true;
+                }
+                return false;
+            };
         }
 
         public void Execute()

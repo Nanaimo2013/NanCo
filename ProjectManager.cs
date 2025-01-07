@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using NanCo.Models;
+using NanCo.FileSystem;
 
 namespace NanCo
 {
@@ -9,33 +11,33 @@ namespace NanCo
     {
         public static void CreateProject(string name)
         {
-            // Use the FileSystemManager's project directory
-            string projectDir = Path.Combine(FileSystemManager.ProjectsDir, name);
-            string srcDir = Path.Combine(projectDir, "src");
-            string assetsDir = Path.Combine(projectDir, "assets");
+            Console.Write("Project Type (C# or NS): ");
+            string projectType = Console.ReadLine()?.ToUpper() ?? "NS";
             
-            try
-            {
-                // Create directory structure
-                Directory.CreateDirectory(projectDir);
-                Directory.CreateDirectory(srcDir);
-                Directory.CreateDirectory(assetsDir);
-                Directory.CreateDirectory(Path.Combine(assetsDir, "images"));
-                Directory.CreateDirectory(Path.Combine(assetsDir, "sounds"));
+            Console.Write("Version (default 1.0.0): ");
+            string version = Console.ReadLine() ?? "1.0.0";
+            
+            Console.Write("Creator: ");
+            string creator = Console.ReadLine() ?? "Unknown";
 
-                // Create project files
-                CreateProjectFiles(name, projectDir, srcDir);
-                
-                // Create run.bat
-                CreateRunBat(name, projectDir);
-
-                Console.WriteLine($"Created new project: {name}");
-                Console.WriteLine($"Location: {projectDir}");
-            }
-            catch (Exception ex)
+            var projectConfig = new ProjectConfig
             {
-                Console.WriteLine($"Error creating project: {ex.Message}");
-            }
+                Name = name,
+                Type = projectType,
+                Version = version,
+                Creator = creator,
+                MainFile = projectType == "CS" ? $"src/{name}.cs" : "src/main.ns",
+                Dependencies = new List<string>(),
+                Assets = new Dictionary<string, string>
+                {
+                    ["images"] = "assets/images",
+                    ["sounds"] = "assets/sounds",
+                    ["scripts"] = "src/scripts"
+                }
+            };
+
+            // Create project structure
+            CreateProjectStructure(name, projectConfig);
         }
 
         private static void CreateProjectFiles(string name, string projectDir, string srcDir)
@@ -114,6 +116,22 @@ build/
 # OS specific
 .DS_Store
 Thumbs.db";
+        }
+
+        private static void CreateProjectStructure(string name, ProjectConfig config)
+        {
+            string projectDir = Path.Combine(FileSystemManager.ProjectsDir, name);
+            string srcDir = Path.Combine(projectDir, "src");
+            string assetsDir = Path.Combine(projectDir, "assets");
+
+            Directory.CreateDirectory(projectDir);
+            Directory.CreateDirectory(srcDir);
+            Directory.CreateDirectory(assetsDir);
+            Directory.CreateDirectory(Path.Combine(assetsDir, "images"));
+            Directory.CreateDirectory(Path.Combine(assetsDir, "sounds"));
+
+            CreateProjectFiles(name, projectDir, srcDir);
+            CreateRunBat(name, projectDir);
         }
     }
 } 

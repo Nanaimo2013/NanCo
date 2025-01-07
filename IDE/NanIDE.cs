@@ -3,27 +3,29 @@ using System.IO;
 using System.Collections.Generic;
 using System.Threading;
 using System.Linq;
+using NanCo.Language;
+using NanCo.Games;
 
-namespace NanCo
+namespace NanCo.IDE
 {
     public class NanIDE
     {
+        private string? currentFile;
         private List<string> codeLines;
         private int cursorX;
         private int cursorY;
         private int scrollOffset;
-        private string currentFile;
         private bool isModified;
-        private readonly int maxDisplayLines;
+        private int maxDisplayLines;
 
-        public NanIDE(string filePath = null)
+        public NanIDE(string? filePath = null)
         {
+            currentFile = filePath;
             codeLines = new List<string> { "" };
             cursorX = 0;
             cursorY = 0;
             scrollOffset = 0;
-            currentFile = filePath;
-            maxDisplayLines = Console.WindowHeight - 7; // Account for UI elements
+            maxDisplayLines = Console.WindowHeight - 7;
             
             if (filePath != null && File.Exists(filePath))
             {
@@ -133,6 +135,21 @@ namespace NanCo
                 case ConsoleKey.Q:
                     return PromptExit();
 
+                case ConsoleKey.P:
+                    var projectView = new ProjectView(Path.GetDirectoryName(currentFile));
+                    projectView.DisplayProjectTree();
+                    while (true)
+                    {
+                        var projectKey = Console.ReadKey(true);
+                        if (projectKey.Key == ConsoleKey.Escape) break;
+                        projectView.HandleInput(projectKey);
+                    }
+                    return false;
+
+                case ConsoleKey.G:
+                    InsertGameTemplate();
+                    return false;
+
                 default:
                     return false;
             }
@@ -140,6 +157,8 @@ namespace NanCo
 
         private void RunCode()
         {
+            if (currentFile == null) return;
+            
             SaveFile();
             Console.Clear();
             Console.WriteLine("=== Running Program ===\n");
@@ -160,35 +179,35 @@ namespace NanCo
 
         private void LoadFile(string path)
         {
-            try
-            {
-                if (File.Exists(path))
-                {
-                    codeLines = File.ReadAllLines(path).ToList();
-                }
-                if (codeLines.Count == 0) codeLines.Add("");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Error loading file: {ex.Message}");
-                codeLines = new List<string> { "" };
-            }
+            currentFile = path;
+            codeLines = File.ReadAllLines(path).ToList();
+            cursorX = 0;
+            cursorY = 0;
+            scrollOffset = 0;
+            isModified = false;
         }
 
         private void DrawInterface()
         {
-            Console.Clear();
-            Console.WriteLine($"NanCo IDE - {currentFile ?? "New File"}");
-            Console.WriteLine("Ctrl+S: Save | Ctrl+R: Run | Ctrl+Q: Quit");
+            // Save cursor position
+            var originalX = Console.CursorLeft;
+            var originalY = Console.CursorTop;
+            
+            // Clear only the necessary parts without full screen clear
+            Console.SetCursorPosition(0, 0);
+            Console.WriteLine($"NanCo IDE - {currentFile ?? "New File"}".PadRight(Console.WindowWidth));
+            Console.WriteLine("Ctrl+S: Save | Ctrl+R: Run | Ctrl+P: Project | Ctrl+Q: Quit".PadRight(Console.WindowWidth));
             Console.WriteLine("─".PadRight(Console.WindowWidth, '─'));
 
             for (int i = scrollOffset; i < Math.Min(codeLines.Count, scrollOffset + maxDisplayLines); i++)
             {
+                Console.SetCursorPosition(0, i - scrollOffset + 3);
                 Console.Write($"{(i + 1).ToString().PadLeft(4)} │ ");
                 HighlightSyntax(codeLines[i]);
-                Console.WriteLine();
+                Console.Write(new string(' ', Console.WindowWidth - Console.CursorLeft));
             }
 
+            // Restore cursor position
             Console.SetCursorPosition(cursorX + 6, cursorY - scrollOffset + 3);
         }
 
@@ -258,6 +277,61 @@ namespace NanCo
                 SaveFile();
             }
             return true;
+        }
+
+        private void HandleInput(ConsoleKeyInfo key)
+        {
+            if (key.Key == ConsoleKey.Tab)
+            {
+                string currentLine = codeLines[cursorY];
+                string word = GetWordBeforeCursor(currentLine);
+                
+                if (NanSyntax.CodeSnippets.ContainsKey(word))
+                {
+                    InsertSnippet(word);
+                    DrawInterface();
+                }
+            }
+            // ... rest of input handling
+        }
+
+        private void InsertSnippet(string keyword)
+        {
+            string snippet = NanSyntax.CodeSnippets[keyword];
+            string[] snippetLines = snippet.Split('\n');
+            
+            codeLines.RemoveAt(cursorY);
+            foreach (var line in snippetLines.Reverse())
+            {
+                codeLines.Insert(cursorY, line);
+            }
+        }
+
+        private string GetWordBeforeCursor(string line)
+        {
+            int start = cursorX;
+            while (start > 0 && char.IsLetterOrDigit(line[start - 1]))
+            {
+                start--;
+            }
+            return line.Substring(start, cursorX - start);
+        }
+
+        private void InsertGameTemplate()
+        {
+            Console.SetCursorPosition(0, Console.WindowHeight - 1);
+            Console.Write("Select template (1: Basic, 2: Arcade): ");
+            var choice = Console.ReadKey(true);
+            
+            string template = choice.KeyChar == '1' ? 
+                GameManager.GameTemplates["basic"] : 
+                GameManager.GameTemplates["arcade"];
+            
+            codeLines.Clear();
+            codeLines.AddRange(template.Split('\n'));
+            cursorX = 0;
+            cursorY = 0;
+            isModified = true;
         }
     }
 } 

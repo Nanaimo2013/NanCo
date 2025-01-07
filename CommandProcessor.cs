@@ -1,10 +1,26 @@
 ﻿using System;
 using System.IO;
+using System.Collections.Generic;
+using NanCo.Language;
+using NanCo.FileSystem;
+using NanCo.IDE;
+using NanCo.Models;
+using NanCo.Games;
 
 namespace NanCo
 {
     static class CommandProcessor
     {
+        private static Dictionary<string, Action> customCommands = new();
+
+        public static void RegisterCustomCommand(string name, Action action)
+        {
+            if (!customCommands.ContainsKey(name))
+            {
+                customCommands.Add(name, action);
+            }
+        }
+
         public static void ProcessCommand(string command, Terminal terminal)
         {
             var args = command.Split(' ');
@@ -16,29 +32,66 @@ namespace NanCo
                     DisplayHelp();
                     break;
                     
+                case "ide":
+                    var ide = new NanIDE();
+                    ide.Start();
+                    break;
+
                 case "new":
-                    if (args.Length > 2 && args[1] == "project")
+                    if (args.Length > 1)
                     {
-                        ProjectManager.CreateProject(args[2]);
+                        if (args[1].ToLower() == "project")
+                        {
+                            if (args.Length > 2)
+                            {
+                                ProjectManager.CreateProject(args[2]);
+                            }
+                            else
+                            {
+                                Console.WriteLine("Usage: new project <name>");
+                            }
+                        }
+                        else if (args[1].ToLower() == "file")
+                        {
+                            var editor = new NanIDE();
+                            editor.Start();
+                        }
                     }
                     else
                     {
-                        Console.WriteLine("Usage: new project <name>");
+                        Console.WriteLine("Usage: new [file|project] <name>");
                     }
                     break;
 
                 case "run":
-                    if (args.Length > 1)
+                    if (args.Length > 2 && args[1].ToLower() == "game")
                     {
-                        string filePath = args[1];
-                        if (Path.GetExtension(filePath).ToLower() == ".ns")
+                        var games = new GameManager();
+                        var gameName = args[2].ToLower();
+                        var gameIndex = games.Games.FindIndex(g => g.Name.ToLower() == gameName);
+                        if (gameIndex >= 0)
                         {
-                            var runner = new NanScriptRunner(filePath);
-                            runner.Execute();
+                            games.StartGame(gameIndex);
                         }
                         else
                         {
-                            Console.WriteLine("Can only run .ns files");
+                            Console.WriteLine($"Game '{args[2]}' not found. Use 'games' to see available games.");
+                        }
+                    }
+                    else
+                    {
+                        if (args.Length > 1)
+                        {
+                            string filePath = args[1];
+                            if (Path.GetExtension(filePath).ToLower() == ".ns")
+                            {
+                                var runner = new NanScriptRunner(filePath);
+                                runner.Execute();
+                            }
+                            else
+                            {
+                                Console.WriteLine("Can only run .ns files");
+                            }
                         }
                     }
                     break;
@@ -66,6 +119,26 @@ namespace NanCo
 
                 case "exit":
                     Environment.Exit(0);
+                    break;
+
+                case "games":
+                    var gameManager = new GameManager();
+                    gameManager.ListGames();
+                    Console.Write("\nSelect a game (number) or press Enter to cancel: ");
+                    if (int.TryParse(Console.ReadLine(), out int selection))
+                    {
+                        gameManager.StartGame(selection - 1);
+                    }
+                    break;
+
+                case "dino":
+                    var dinoGame = new DinoGame();
+                    dinoGame.Start();
+                    break;
+
+                case "snake":
+                    var snakeGame = new SnakeGame();
+                    snakeGame.Start();
                     break;
 
                 default:
@@ -114,10 +187,11 @@ namespace NanCo
             Console.WriteLine("  compile <file>  - Compile NanCo script");
             Console.WriteLine("  run <file>      - Run NanCo script or project");
             
-            Console.WriteLine("\nGames & Apps:");
+            Console.WriteLine("\nGames & Entertainment:");
+            Console.WriteLine("  games           - List and play available games");
+            Console.WriteLine("  snake           - Play Snake game");
             Console.WriteLine("  dino            - Play Dino game");
-            Console.WriteLine("  games           - List available games");
-            Console.WriteLine("  run game <name> - Run specific game");
+            Console.WriteLine("  run game <name> - Run specific game by name");
             
             Console.WriteLine("\nSystem Commands:");
             Console.WriteLine("  clear           - Clear screen");

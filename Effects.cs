@@ -185,12 +185,11 @@ namespace NanCo
                 Console.Write(c);
                 if (char.IsWhiteSpace(c))
                 {
-                    Thread.Sleep(random.Next(50, 100));
+                    Thread.Sleep(random.Next(10, 20));
                 }
                 else
                 {
-                    Audio.PlayKeyPress();
-                    Thread.Sleep(random.Next(30, 50));
+                    Thread.Sleep(random.Next(5, 10));
                 }
             }
         }
@@ -198,12 +197,23 @@ namespace NanCo
         public static void LoadingBar(int duration)
         {
             Console.Write("[");
+            ConsoleColor originalColor = Console.ForegroundColor;
+            Console.ForegroundColor = LoadingBarColor;
+            
             for (int i = 0; i < 20; i++)
             {
                 Thread.Sleep(duration);
                 Console.Write("█");
             }
+            
+            Console.ForegroundColor = originalColor;
             Console.Write("]");
+        }
+
+        public static void ScreenFlash()
+        {
+            // Removed the flashing effect completely
+            Thread.Sleep(1);  // Small pause instead
         }
     }
 }

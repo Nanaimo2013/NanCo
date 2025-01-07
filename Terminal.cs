@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Runtime.InteropServices;
+using NanCo.FileSystem;
+using NanCo.Language;
+using NanCo.IDE;
+using NanCo.Games;
+using NanCo;
 
 namespace NanCo
 {
@@ -19,6 +24,7 @@ namespace NanCo
             try
             {
                 InitializeConsole();
+                InitializeGames();
                 
                 LoadUsers();
                 
@@ -113,22 +119,29 @@ namespace NanCo
 
         private string GetVersion()
         {
-            try
-            {
-                if (File.Exists(versionFile))
-                {
-                    return File.ReadAllText(versionFile).Trim();
-                }
-            }
-            catch
-            {
-                // If there's any error, return a default version
-            }
-            return "1.0.0";
+            return VersionManager.GetVersion();
         }
 
         private void DisplayTerminalLogo()
         {
+            Console.Clear();
+            Console.WriteLine();
+            Effects.TypewriterEffect("Initializing Terminal Interface...");
+            Effects.LoadingBar(20);
+            Console.WriteLine(" [OK]");
+
+            Console.WriteLine();
+            Effects.TypewriterEffect("Loading User Profile...");
+            Effects.LoadingBar(15);
+            Console.WriteLine(" [OK]");
+
+            Console.WriteLine();
+            Effects.TypewriterEffect("Configuring Environment...");
+            Effects.LoadingBar(25);
+            Console.WriteLine(" [OK]");
+
+            Thread.Sleep(500);
+            Console.WriteLine();
             Console.Clear();
             string terminalLogo = @"
     ███╗   ██╗ █████╗ ███╗   ██╗███████╗    
@@ -142,47 +155,31 @@ namespace NanCo
     ███████╗   ██║   ██║   ██║██║  ██║██║██║   ██║
     ╚════██║   ██║   ██║   ██║██║  ██║██║██║   ██║
     ███████║   ██║   ╚██████╔╝██████╔╝██║╚██████╔╝
-    ╚══════╝   ╚═╝    ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ 
-    ";
+    ╚══════╝   ╚═╝    ╚═════╝ ╚═════╝ ╚═╝ ╚═════╝ ";
 
             foreach (var line in terminalLogo.Split('\n'))
             {
-                Effects.TypewriterEffect(line);
+                Console.WriteLine(line);
                 Audio.PlayBeep(new Random().Next(300, 800), 10);
+                Thread.Sleep(50);
             }
-
-            Effects.TypewriterEffect("\nInitializing Terminal Interface...");
-            Effects.LoadingBar(20);
-            Console.WriteLine(" [OK]");
-
-            Effects.TypewriterEffect("Loading User Profile...");
-            Effects.LoadingBar(15);
-            Console.WriteLine(" [OK]");
-
-            Effects.TypewriterEffect("Configuring Environment...");
-            Effects.LoadingBar(25);
-            Console.WriteLine(" [OK]");
-
-            Thread.Sleep(500);
-            Console.WriteLine();
         }
 
-        private void DisplayWelcomeMessage()
-        {
-            string version = GetVersion();
-            string welcomeBox = $@"
-     ╔════════════════════════════════════════════════════╗
-     ║             NanS Studio Terminal                   ║
-     ║             Version {version,-28} ║
-     ║                                                    ║
-     ║         Welcome, {currentUser,-32} ║
-     ║         Type 'help' for assistance                 ║
-     ╚════════════════════════════════════════════════════╝
-    ";
+    private void DisplayWelcomeMessage()
+    {
+        string version = GetVersion();
+        string welcomeBox = $@"
+     ╔════════════════════════════════════════════════╗
+     ║              NanS Studio Terminal              ║
+     ║             Version {version,-28}║
+     ║                                                ║
+     ║              Welcome, {currentUser,-32}║
+     ║           Type 'help' for assistance           ║
+     ╚════════════════════════════════════════════════╝ ";
 
-            Effects.TypewriterEffect(welcomeBox);
-            Console.WriteLine("\n");
-        }
+        Console.WriteLine(welcomeBox);
+        Console.WriteLine("\n");
+    }
 
         private bool AuthenticateUser()
         {
@@ -386,6 +383,62 @@ namespace NanCo
      ╚═══════════════════════════════════════════╝";
 
             Console.WriteLine(logo);
+        }
+
+        private void HandleDirectoryCommands(string command)
+        {
+            if (command.StartsWith("cd "))
+            {
+                string path = command.Substring(3);
+                try
+                {
+                    if (path == "..")
+                    {
+                        Directory.SetCurrentDirectory("..");
+                    }
+                    else
+                    {
+                        Directory.SetCurrentDirectory(path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error: {ex.Message}");
+                }
+            }
+            else if (command == "ls" || command == "dir")
+            {
+                string[] dirs = Directory.GetDirectories(".");
+                string[] files = Directory.GetFiles(".");
+
+                Console.WriteLine("\nDirectories:");
+                foreach (string dir in dirs)
+                {
+                    Console.WriteLine($"  [{Directory.GetLastWriteTime(dir):yyyy-MM-dd HH:mm}] {Path.GetFileName(dir)}/");
+                }
+
+                Console.WriteLine("\nFiles:");
+                foreach (string file in files)
+                {
+                    Console.WriteLine($"  [{File.GetLastWriteTime(file):yyyy-MM-dd HH:mm}] {Path.GetFileName(file)}");
+                }
+            }
+        }
+
+        private void InitializeGames()
+        {
+            try
+            {
+                var gameManager = new GameManager();
+                if (gameManager.Games.Count == 0)
+                {
+                    Console.WriteLine("Warning: No games loaded");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Game system initialization failed - {ex.Message}");
+            }
         }
     }
 

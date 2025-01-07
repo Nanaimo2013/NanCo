@@ -1,207 +1,218 @@
 ﻿using System;
+using System.IO;
 using System.Threading;
+using NanCo.FileSystem;
+using NanCo.Games;
+using NanCo.Language;
+using System.Threading.Tasks;
 
 namespace NanCo
 {
     public static class Boot
     {
-        private static readonly Random random = new Random();
+        private static bool allTestsPassed = true;
+        private static string? currentVersion;
+
+        public static async Task Initialize()
+        {
+            currentVersion = GetVersion();
+            Console.WriteLine($"Current Version: {currentVersion}");
+            
+            try
+            {
+                var updater = new UpdateManager();
+                await updater.CheckForUpdates();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Update check failed: {ex.Message}");
+            }
+        }
 
         public static void Start()
         {
-            // Set console colors
             Console.BackgroundColor = ConsoleColor.Black;
             Console.ForegroundColor = ConsoleColor.DarkGreen;
             Console.Clear();
 
-            Effects.TypewriterEffect("INITIALIZING TERMINAL...");
-            Effects.LoadingBar(20);
-            Console.WriteLine(" [OK]");
-
-            if (OperatingSystem.IsWindows())
+            DisplayBootHeader();
+            
+            if (!ConfirmSystemTest())
             {
+                Effects.TypewriterEffect("\nSystem test skipped. Starting NanCo...");
+                Thread.Sleep(1000);
+                return;
+            }
+            
+            RunSystemTests();
+
+            if (allTestsPassed)
+            {
+                Effects.TypewriterEffect("\nBOOT SEQUENCE COMPLETE - ALL TESTS PASSED");
+                Effects.LoadingBar(20);
+                Console.WriteLine("\n");
+            }
+            else
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Effects.TypewriterEffect("\nWARNING: Some tests failed. System may be unstable.");
+                if (!ConfirmContinue())
+                {
+                    Environment.Exit(1);
+                }
+                Console.ForegroundColor = ConsoleColor.DarkGreen;
+            }
+        }
+
+        private static bool ConfirmSystemTest()
+        {
+            Console.Write("\nRun system diagnostic tests? (Y/N): ");
+            while (true)
+            {
+                var key = Console.ReadKey(true);
+                if (key.Key == ConsoleKey.Y)
+                {
+                    Console.WriteLine("Y");
+                    return true;
+                }
+                if (key.Key == ConsoleKey.N)
+                {
+                    Console.WriteLine("N");
+                    return false;
+                }
+            }
+        }
+
+        private static bool ConfirmContinue()
+        {
+            Console.Write("\nContinue anyway? (Y/N): ");
+            while (true)
+            {
+                var key = Console.ReadKey(true);
+                if (key.Key == ConsoleKey.Y)
+                {
+                    Console.WriteLine("Y");
+                    return true;
+                }
+                if (key.Key == ConsoleKey.N)
+                {
+                    Console.WriteLine("N");
+                    return false;
+                }
+            }
+        }
+
+        private static string GetVersion()
+        {
+            return VersionManager.GetVersion();
+        }
+
+        private static void RunSystemTests()
+        {
+            // Version Check
+            RunTest("Version Check", () => {
+                string version = GetVersion();
+                return version.StartsWith("v") && version.Contains("beta");
+            });
+
+            // File System Check
+            RunTest("File System Check", () => {
+                Console.WriteLine("\nChecking critical directories...");
+                var dirs = new[] {
+                    FileSystemManager.ProjectsDir,
+                    FileSystemManager.ScriptsDir,
+                    FileSystemManager.ConfigDir
+                };
+
+                foreach (var dir in dirs)
+                {
+                    Console.WriteLine($"Verifying: {Path.GetFileName(dir)}");
+                    Directory.CreateDirectory(dir);
+                    if (!Directory.Exists(dir)) return false;
+                }
+                return true;
+            });
+
+            // Game System Check
+            RunTest("Game System Check", () => {
+                Console.WriteLine("\nVerifying game system...");
                 try
                 {
-                    Effects.TypewriterEffect("CONFIGURING DISPLAY...");
-                    Effects.LoadingBar(10);
-                    Console.SetWindowSize(120, 40);
-                    Console.WriteLine(" [OK]");
+                    var gameManager = new GameManager();
+                    var gameCount = gameManager.Games.Count;
+                    Console.WriteLine($"Found {gameCount} games");
+                    return gameCount >= 2; // At least Snake and Dino games
                 }
-                catch
+                catch (Exception ex)
                 {
-                    Console.WriteLine(" [FAILED]");
+                    Console.WriteLine($"Warning: {ex.Message}");
+                    return true; // Continue even if leaderboard is unavailable
                 }
-            }
-            Console.Title = "NanCo Terminal";
-            
-            // Initial POST sequence
-            PowerOnSelfTest();
-            
-            // Play startup sound
-            Effects.TypewriterEffect("INITIALIZING AUDIO SYSTEM...");
-            Effects.LoadingBar(15);
-            Audio.PlayBootSound();
-            Console.WriteLine(" [OK]");
-            
-            // Initial screen flicker effect
-            Effects.TypewriterEffect("PERFORMING DISPLAY TEST...");
+            });
+
+            // Script Engine Check
+            RunTest("Script Engine Check", () => {
+                Console.WriteLine("\nTesting script engine...");
+                var testScript = Path.Combine(FileSystemManager.ScriptsDir, "test.ns");
+                try {
+                    File.WriteAllText(testScript, "print \"test\"");
+                    var runner = new NanScriptRunner(testScript);
+                    runner.Execute();
+                    File.Delete(testScript);
+                    return true;
+                }
+                catch (Exception ex) {
+                    Console.WriteLine($"Script test failed: {ex.Message}");
+                    return false;
+                }
+            });
+        }
+
+        private static void RunTest(string testName, Func<bool> test)
+        {
+            Effects.TypewriterEffect($"Testing {testName}...");
             Effects.LoadingBar(10);
-            Effects.ScreenFlicker();
-            Console.WriteLine(" [OK]");
             
-            DisplayNanCoLogo();
-            
-            // Detailed boot sequence
-            RunDetailedBootSequence();
-            
-            // Initialize systems
-            InitializeSystems();
-
-            // Final boot message
-            Effects.TypewriterEffect("\nVERIFYING BOOT SEQUENCE...");
-            Effects.LoadingBar(30);
-            Console.WriteLine(" [VERIFIED]");
-            
-            Effects.TypewriterEffect("BOOT SEQUENCE COMPLETE - TERMINAL READY");
-            Effects.LoadingBar(40);
-            Console.WriteLine("\n");
-        }
-
-        private static void PowerOnSelfTest()
-        {
-            string[] postMessages = {
-                "PERFORMING POST...",
-                "CHECKING CPU STATUS...",
-                "INITIALIZING MEMORY...",
-                "DETECTING HARDWARE...",
-                "VERIFYING SYSTEM INTEGRITY...",
-                "LOADING SYSTEM PARAMETERS..."
-            };
-
-            foreach (var msg in postMessages)
-            {
-                Effects.TypewriterEffect(msg);
-                Effects.LoadingBar(random.Next(10, 25));
-                Console.WriteLine(" [OK]");
-                Audio.PlayBeep(800, 30);
-                Thread.Sleep(200);
+            bool passed = false;
+            try {
+                passed = test();
             }
-            Console.WriteLine();
+            catch (Exception ex) {
+                Console.WriteLine($" [FAILED] - {ex.Message}");
+                allTestsPassed = false;
+                return;
+            }
+
+            if (passed) {
+                Console.WriteLine(" [OK]");
+                Audio.PlayBeep(1000, 30);
+            }
+            else {
+                Console.WriteLine(" [FAILED]");
+                Audio.PlayBeep(500, 100);
+                allTestsPassed = false;
+            }
         }
 
-        private static void DisplayNanCoLogo()
+        private static void DisplayBootHeader()
         {
-            Effects.TypewriterEffect("LOADING SYSTEM IDENTITY...");
-            Effects.LoadingBar(20);
-            Console.WriteLine(" [OK]\n");
-
-            string nancoLogo = @"
+            string header = @"
     ███╗   ██╗ █████╗ ███╗   ██╗ ██████╗ ██████╗ 
     ████╗  ██║██╔══██╗████╗  ██║██╔════╝██╔═══██╗
     ██╔██╗ ██║███████║██╔██╗ ██║██║     ██║   ██║
     ██║╚██╗██║██╔══██║██║╚██╗██║██║     ██║   ██║
     ██║ ╚████║██║  ██║██║ ╚████║╚██████╗╚██████╔╝
     ╚═╝  ╚═══╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ 
-                                                  
+    
      ╔═══════════════════════════════════════════╗
-     ║      NanS Studio Proprietary Systems      ║
-     ║         (c) 2024 All Rights Reserved      ║
-     ╚═══════════════════════════════════════════╝
-";
-            
-            foreach (var line in nancoLogo.Split('\n'))
+     ║           System Diagnostic Test          ║
+     ╚═══════════════════════════════════════════╝";
+
+            foreach (var line in header.Split('\n'))
             {
                 Console.WriteLine(line);
-                Audio.PlayBeep(random.Next(300, 800), 10);
                 Thread.Sleep(50);
             }
-
-            Effects.TypewriterEffect("VERIFYING SYSTEM SIGNATURE...");
-            Effects.LoadingBar(25);
-            Console.WriteLine(" [AUTHENTICATED]");
-            Thread.Sleep(1000);
-            Console.WriteLine();
-        }
-
-        private static void RunDetailedBootSequence()
-        {
-            string[] diagnostics = {
-                "Initializing BIOS",
-                "Loading Memory Management",
-                "Checking Hardware Components",
-                "Loading System Kernel",
-                "Configuring System Parameters"
-            };
-
-            Console.WriteLine("RUNNING SYSTEM DIAGNOSTICS:");
-            Console.WriteLine("═".PadRight(50, '═'));
-
-            foreach (var line in diagnostics)
-            {
-                Effects.TypewriterEffect($">> {line}...");
-                Effects.LoadingBar(random.Next(15, 30));
-                Console.WriteLine(" [OK]");
-                Audio.PlayBeep(1200, 40);
-                Thread.Sleep(300);
-            }
-
-            // Technical readouts
-            string[] technicalInfo = {
-                "MEMORY TEST",
-                "RAM VERIFICATION",
-                "STORAGE SCAN",
-                "HOLOTAPE CHECK",
-                "TERMINAL SERVICES",
-                "FILE SYSTEM CHECK"
-            };
-
-            Console.WriteLine("\nSYSTEM DIAGNOSTIC REPORT:");
-            Console.WriteLine("═".PadRight(50, '═'));
-            
-            foreach (var info in technicalInfo)
-            {
-                Effects.TypewriterEffect($">> {info}...");
-                Effects.LoadingBar(random.Next(10, 20));
-                Console.WriteLine(" [VERIFIED]");
-                Audio.PlayBeep(random.Next(500, 2000), 50);
-                Thread.Sleep(300);
-            }
-        }
-
-        private static void InitializeSystems()
-        {
-            string[] systems = {
-                "Terminal Interface",
-                "File System",
-                "Command Processor",
-                "IDE Subsystem",
-                "Audio Subsystem",
-                "Security Protocol",
-                "Network Stack",
-                "System Services"
-            };
-
-            Console.WriteLine("\nINITIALIZING CORE SYSTEMS:");
-            Console.WriteLine("═".PadRight(50, '═'));
-            
-            foreach (var system in systems)
-            {
-                Effects.TypewriterEffect($"Loading {system}...");
-                Effects.LoadingBar(random.Next(15, 25));
-                Console.WriteLine(" [ONLINE]");
-                Audio.PlayBeep(1000, 30);
-                Thread.Sleep(200);
-            }
-
-            // Final system check
-            Console.WriteLine("\nPERFORMING FINAL SYSTEM CHECK:");
-            Effects.LoadingBar(40);
-            Console.WriteLine(" [COMPLETE]");
-            Audio.PlayBeep(2000, 100);
-
-            Effects.TypewriterEffect("VALIDATING SYSTEM STATE...");
-            Effects.LoadingBar(30);
-            Console.WriteLine(" [OPTIMAL]");
         }
     }
 }
